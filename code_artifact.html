@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VS Code Style Multiplayer Tetris</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+JP:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .neon-border-blue {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(56, 189, 248, 0.2);
+            border: 2px solid #38bdf8;
+        }
+
+        .neon-border-purple {
+            box-shadow: 0 0 15px rgba(192, 132, 252, 0.4), inset 0 0 10px rgba(192, 132, 252, 0.2);
+            border: 2px solid #c084fc;
+        }
+
+        .neon-text-blue {
+            text-shadow: 0 0 8px rgba(56, 189, 248, 0.7);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 overflow-x-hidden">
+
+    <!-- Header Navbar -->
+    <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 py-2.5 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-blue-600/20 text-blue-400 p-2 rounded-lg border border-blue-500/30">
+                <i class="fa-solid fa-cubes text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold font-orbitron tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">NEON TETRIS</h1>
+                <p class="text-xs text-slate-400 hidden sm:block">vscode.dev Multiplayer Edition</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="soundToggleBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                <i class="fa-solid fa-volume-high text-sm"></i>
+            </button>
+            <button id="touchControlToggleBtn" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition md:hidden">
+                <i class="fa-solid fa-gamepad text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col p-2 sm:p-4 max-w-7xl w-full mx-auto justify-center">
+
+        <!-- LOBBY SCREEN -->
+        <section id="lobbyScreen" class="flex-1 flex flex-col justify-center items-center py-6">
+            <div class="max-w-xl w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold font-orbitron text-slate-100 mb-1">ゲームモード選択</h2>
+                    <p class="text-sm text-slate-400">1人での練習から最大8人での白熱オンライン対戦まで可能</p>
+                </div>
+
+                <!-- Mode Selection Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                    <button id="modeSingleBtn" class="p-4 rounded-xl bg-slate-800/80 border-2 border-slate-700 hover:border-blue-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-center group">
+                        <i class="fa-solid fa-user text-2xl mb-2 text-blue-400 group-hover:scale-110 transition"></i>
+                        <span class="font-bold text-sm">1人プレイ</span>
+                        <span class="text-xs text-slate-400 mt-1">ハイスコア挑戦</span>
+                    </button>
+
+                    <button id="modeDuoBtn" class="p-4 rounded-xl bg-slate-800/80 border-2 border-slate-700 hover:border-purple-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-center group">
+                        <i class="fa-solid fa-user-ninja text-2xl mb-2 text-purple-400 group-hover:scale-110 transition"></i>
+                        <span class="font-bold text-sm">2人対戦</span>
+                        <span class="text-xs text-slate-400 mt-1">1v1 デュエル</span>
+                    </button>
+
+                    <button id="modeMultiBtn" class="p-4 rounded-xl bg-slate-800/80 border-2 border-slate-700 hover:border-emerald-500 hover:bg-slate-800 transition flex flex-col items-center justify-center text-center group">
+                        <i class="fa-solid fa-users text-2xl mb-2 text-emerald-400 group-hover:scale-110 transition"></i>
+                        <span class="font-bold text-sm">3人以上対戦</span>
+                        <span class="text-xs text-slate-400 mt-1">最大8人バトル</span>
+                    </button>
+                </div>
+
+                <!-- Room ID Setup Area (Multiplayer Only) -->
+                <div id="roomSetupArea" class="hidden space-y-4 pt-4 border-t border-slate-800">
+                    <div class="flex flex-col space-y-2">
+                        <label class="text-xs font-semibold text-slate-300">プレイヤー名</label>
+                        <input type="text" id="playerNameInput" maxlength="10" placeholder="名前を入力..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-300">新しい部屋を作る</label>
+                            <button id="createRoomBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm transition flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>ルーム作成</span>
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-300">既存の部屋に参加</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="joinRoomIdInput" placeholder="ルームID" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm uppercase font-orbitron focus:outline-none focus:border-blue-500">
+                                <button id="joinRoomBtn" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition shrink-0">
+                                    参加
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Room Waiting Area -->
+                <div id="roomWaitingArea" class="hidden space-y-4 pt-4 border-t border-slate-800">
+                    <div class="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+                        <div>
+                            <span class="text-xs text-slate-400 block">ROOM ID</span>
+                            <span id="displayRoomId" class="font-orbitron font-bold text-lg text-blue-400 tracking-wider">------</span>
+                        </div>
+                        <button id="copyRoomIdBtn" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 flex items-center space-x-1">
+                            <i class="fa-regular fa-copy"></i>
+                            <span>コピー</span>
+                        </button>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-semibold text-slate-300">参加者リスト</span>
+                            <span id="playerCountBadge" class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full">1/8</span>
+                        </div>
+                        <div id="playerList" class="bg-slate-950 border border-slate-800 rounded-xl p-2 max-h-36 overflow-y-auto space-y-1.5">
+                            <!-- Players populated dynamically -->
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-2 pt-2">
+                        <button id="leaveRoomBtn" class="w-1/3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-sm transition">
+                            退出
+                        </button>
+                        <button id="startGameBtn" class="w-2/3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/30">
+                            <i class="fa-solid fa-play"></i>
+                            <span id="startGameBtnText">ゲームスタート</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GAME PLAY SCREEN -->
+        <section id="gameScreen" class="hidden flex-1 flex flex-col md:flex-row gap-4 items-center md:items-start justify-center">
+            
+            <!-- Left Info Panel (Hold & Stats) -->
+            <div class="flex md:flex-col gap-3 w-full md:w-40 shrink-0 justify-between md:justify-start">
+                <!-- Hold Box -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 text-center flex-1 md:flex-none">
+                    <span class="text-xs text-slate-400 font-bold tracking-wider uppercase block mb-1">HOLD</span>
+                    <div class="flex justify-center items-center h-16 bg-slate-950/80 rounded-lg border border-slate-800/50">
+                        <canvas id="holdCanvas" width="80" height="80"></canvas>
+                    </div>
+                </div>
+
+                <!-- Status Stats Box -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 space-y-2 flex-1 md:flex-none">
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-semibold block">SCORE</span>
+                        <span id="scoreText" class="text-lg font-orbitron font-bold text-blue-400">0</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-semibold block">LINES</span>
+                        <span id="linesText" class="text-base font-orbitron font-bold text-slate-200">0</span>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-semibold block">LEVEL</span>
+                        <span id="levelText" class="text-base font-orbitron font-bold text-purple-400">1</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Canvas Area -->
+            <div class="relative flex flex-col items-center">
+                <!-- Garbage Warning Gauge -->
+                <div class="w-full max-w-[260px] sm:max-w-[300px] mb-1 flex items-center justify-between text-xs px-1">
+                    <span class="text-red-400 font-bold flex items-center space-x-1">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>お邪魔攻撃</span>
+                    </span>
+                    <span id="garbageCountText" class="font-orbitron font-bold text-red-400">0</span>
+                </div>
+
+                <div class="relative rounded-xl overflow-hidden neon-border-blue bg-slate-950 p-1">
+                    <canvas id="mainCanvas" width="300" height="600" class="w-[260px] h-[520px] sm:w-[300px] sm:h-[600px]"></canvas>
+                    
+                    <!-- Overlay Game Over / Countdown -->
+                    <div id="gameOverlay" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center hidden z-20">
+                        <h3 id="overlayTitle" class="text-2xl font-bold font-orbitron mb-2 text-blue-400">READY</h3>
+                        <p id="overlaySub" class="text-sm text-slate-300 text-center px-4 mb-4">準備中...</p>
+                        <button id="overlayBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2 rounded-xl text-sm transition hidden">
+                            ロビーへ戻る
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Info Panel (Next Queue & Opponents) -->
+            <div class="flex flex-col gap-3 w-full md:w-64 shrink-0">
+                <!-- Next Box -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 text-center">
+                    <span class="text-xs text-slate-400 font-bold tracking-wider uppercase block mb-1">NEXT</span>
+                    <div class="flex justify-center items-center space-x-2 bg-slate-950/80 p-2 rounded-lg border border-slate-800/50">
+                        <canvas id="nextCanvas1" width="60" height="60"></canvas>
+                        <canvas id="nextCanvas2" width="50" height="50" class="opacity-70"></canvas>
+                        <canvas id="nextCanvas3" width="40" height="40" class="opacity-40"></canvas>
+                    </div>
+                </div>
+
+                <!-- Opponents Grid (Multiplayer Only) -->
+                <div id="opponentsSection" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex-1 min-h-[180px] flex flex-col">
+                    <span class="text-xs text-slate-400 font-bold tracking-wider uppercase block mb-2">OPPONENTS</span>
+                    <div id="opponentsGrid" class="grid grid-cols-2 gap-2 overflow-y-auto max-h-[300px] p-1 flex-1">
+                        <!-- Dynamic Mini Opponent Canvases -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Touch Controller (Mobile / Webview) -->
+    <div id="touchController" class="hidden fixed bottom-2 left-0 right-0 p-2 z-30 pointer-events-none md:hidden">
+        <div class="max-w-md mx-auto flex justify-between items-center pointer-events-auto">
+            <!-- Direction Pad -->
+            <div class="grid grid-cols-3 gap-1.5 w-36 h-36">
+                <div></div>
+                <button id="btnRotate" class="bg-slate-800/80 border border-slate-700 text-white rounded-xl active:bg-blue-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+                <div></div>
+
+                <button id="btnLeft" class="bg-slate-800/80 border border-slate-700 text-white rounded-xl active:bg-blue-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <button id="btnSoftDrop" class="bg-slate-800/80 border border-slate-700 text-white rounded-xl active:bg-blue-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+                <button id="btnRight" class="bg-slate-800/80 border border-slate-700 text-white rounded-xl active:bg-blue-600 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+
+                <div></div>
+                <button id="btnHold" class="bg-slate-800/80 border border-slate-700 text-slate-300 rounded-xl active:bg-purple-600 flex items-center justify-center text-xs font-bold">
+                    HOLD
+                </button>
+                <div></div>
+            </div>
+
+            <!-- Action Pad -->
+            <div class="flex flex-col space-y-2 w-28">
+                <button id="btnHardDrop" class="h-20 bg-blue-600/80 border border-blue-500 text-white font-bold rounded-2xl active:bg-blue-500 flex flex-col items-center justify-center shadow-lg">
+                    <i class="fa-solid fa-angles-down text-xl mb-1"></i>
+                    <span class="text-xs">DROP</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Notification Toast -->
+    <div id="toastContainer" class="fixed top-16 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <script>
+        // Web Audio API Sound Synth Engine
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            }
+
+            playTone(freq, type, duration, vol = 0.1) {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+
+            move() { this.playTone(300, 'sine', 0.05, 0.05); }
+            rotate() { this.playTone(450, 'triangle', 0.08, 0.08); }
+            drop() { this.playTone(180, 'square', 0.1, 0.12); }
+            clear() {
+                if (this.muted) return;
+                this.init();
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+                    setTimeout(() => this.playTone(freq, 'sine', 0.15, 0.1), idx * 60);
+                });
+            }
+            garbage() { this.playTone(120, 'sawtooth', 0.2, 0.15); }
+            gameover() {
+                if (this.muted) return;
+                this.init();
+                [300, 250, 200, 150].forEach((freq, idx) => {
+                    setTimeout(() => this.playTone(freq, 'sawtooth', 0.2, 0.12), idx * 100);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        const COLS = 10;
+        const ROWS = 20;
+
+        const TETROMINOES = {
+            'I': { shape: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], color: '#38bdf8' }, // Cyan
+            'J': { shape: [[1,0,0],[1,1,1],[0,0,0]], color: '#3b82f6' }, // Blue
+            'L': { shape: [[0,0,1],[1,1,1],[0,0,0]], color: '#f97316' }, // Orange
+            'O': { shape: [[1,1],[1,1]], color: '#eab308' }, // Yellow
+            'S': { shape: [[0,1,1],[1,1,0],[0,0,0]], color: '#22c55e' }, // Green
+            'T': { shape: [[0,1,0],[1,1,1],[0,0,0]], color: '#a855f7' }, // Purple
+            'Z': { shape: [[1,1,0],[0,1,1],[0,0,0]], color: '#ef4444' }  // Red
+        };
+
+        const GARBAGE_COLOR = '#64748b';
+
+        let mode = 'single'; // 'single', 'duo', 'multi'
+        let peer = null;
+        let myPeerId = '';
+        let myName = 'Player';
+        let hostConn = null;
+        let connections = {}; // For host: peerId -> DataConnection
+        let players = {}; // peerId -> { name, isHost, ready, isAlive, rank, score }
+        let isHost = false;
+        let gameRunning = false;
+
+        // Game State Variables
+        let board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        let score = 0;
+        let lines = 0;
+        let level = 1;
+        let currentPiece = null;
+        let holdPiece = null;
+        let canHold = true;
+        let nextQueue = [];
+        let dropCounter = 0;
+        let dropInterval = 1000;
+        let lastTime = 0;
+        let animationFrameId = null;
+        let pendingGarbage = 0;
+
+        const lobbyScreen = document.getElementById('lobbyScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const roomSetupArea = document.getElementById('roomSetupArea');
+        const roomWaitingArea = document.getElementById('roomWaitingArea');
+        const opponentsSection = document.getElementById('opponentsSection');
+        const opponentsGrid = document.getElementById('opponentsGrid');
+
+        const mainCanvas = document.getElementById('mainCanvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const holdCanvas = document.getElementById('holdCanvas');
+        const holdCtx = holdCanvas.getContext('2d');
+        const nextCanvas1 = document.getElementById('nextCanvas1');
+        const nextCtx1 = nextCanvas1.getContext('2d');
+        const nextCanvas2 = document.getElementById('nextCanvas2');
+        const nextCtx2 = nextCanvas2.getContext('2d');
+        const nextCanvas3 = document.getElementById('nextCanvas3');
+        const nextCtx3 = nextCanvas3.getContext('2d');
+
+        const scoreText = document.getElementById('scoreText');
+        const linesText = document.getElementById('linesText');
+        const levelText = document.getElementById('levelText');
+        const garbageCountText = document.getElementById('garbageCountText');
+
+        const gameOverlay = document.getElementById('gameOverlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlaySub = document.getElementById('overlaySub');
+        const overlayBtn = document.getElementById('overlayBtn');
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-slate-800 border border-slate-700';
+            toast.className = `${bgClass} text-white text-xs px-3 py-2 rounded-lg shadow-lg transform transition-all duration-300 opacity-0 translate-y-2 flex items-center space-x-2`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function createPiece(type) {
+            return {
+                type,
+                shape: TETROMINOES[type].shape.map(row => [...row]),
+                color: TETROMINOES[type].color,
+                x: Math.floor(COLS / 2) - Math.ceil(TETROMINOES[type].shape[0].length / 2),
+                y: 0
+            };
+        }
+
+        function refillNextQueue() {
+            const types = Object.keys(TETROMINOES);
+            while (nextQueue.length < 5) {
+                const bag = [...types].sort(() => Math.random() - 0.5);
+                nextQueue.push(...bag);
+            }
+        }
+
+        function collide(board, piece) {
+            const [m, o] = [piece.shape, { x: piece.x, y: piece.y }];
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 &&
+                       (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge(board, piece) {
+            piece.shape.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        board[y + piece.y][x + piece.x] = piece.color;
+                    }
+                });
+            });
+        }
+
+        function rotateMatrix(matrix, dir) {
+            const result = matrix.map((_, i) => matrix.map(col => col[i]));
+            if (dir > 0) return result.map(row => row.reverse());
+            return result.reverse();
+        }
+
+        function playerRotate(dir) {
+            if (!gameRunning || !currentPiece) return;
+            const pos = currentPiece.x;
+            let offset = 1;
+            currentPiece.shape = rotateMatrix(currentPiece.shape, dir);
+            while (collide(board, currentPiece)) {
+                currentPiece.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > currentPiece.shape[0].length) {
+                    currentPiece.shape = rotateMatrix(currentPiece.shape, -dir);
+                    currentPiece.x = pos;
+                    return;
+                }
+            }
+            sound.rotate();
+            draw();
+        }
+
+        function playerMove(dir) {
+            if (!gameRunning || !currentPiece) return;
+            currentPiece.x += dir;
+            if (collide(board, currentPiece)) {
+                currentPiece.x -= dir;
+            } else {
+                sound.move();
+            }
+            draw();
+        }
+
+        function playerDrop() {
+            if (!gameRunning || !currentPiece) return;
+            currentPiece.y++;
+            if (collide(board, currentPiece)) {
+                currentPiece.y--;
+                lockPiece();
+            } else {
+                dropCounter = 0;
+            }
+            draw();
+        }
+
+        function playerHardDrop() {
+            if (!gameRunning || !currentPiece) return;
+            while (!collide(board, currentPiece)) {
+                currentPiece.y++;
+            }
+            currentPiece.y--;
+            sound.drop();
+            lockPiece();
+            draw();
+        }
+
+        function playerHold() {
+            if (!gameRunning || !canHold || !currentPiece) return;
+            if (holdPiece === null) {
+                holdPiece = currentPiece.type;
+                spawnPiece();
+            } else {
+                const temp = holdPiece;
+                holdPiece = currentPiece.type;
+                currentPiece = createPiece(temp);
+            }
+            canHold = false;
+            sound.move();
+            drawHold();
+            draw();
+        }
+
+        function applyGarbageLines() {
+            if (pendingGarbage <= 0) return;
+            const count = pendingGarbage;
+            pendingGarbage = 0;
+            garbageCountText.textContent = '0';
+
+            // Shift board up by count
+            for (let i = 0; i < count; i++) {
+                board.shift();
+                const holeX = Math.floor(Math.random() * COLS);
+                const gRow = Array(COLS).fill(GARBAGE_COLOR);
+                gRow[holeX] = 0;
+                board.push(gRow);
+            }
+            sound.garbage();
+        }
+
+        function lockPiece() {
+            merge(board, currentPiece);
+            canHold = true;
+
+            // Clear Lines
+            let clearedCount = 0;
+            outer: for (let y = board.length - 1; y >= 0; --y) {
+                for (let x = 0; x < board[y].length; ++x) {
+                    if (board[y][x] === 0) continue outer;
+                }
+                const row = board.splice(y, 1)[0].fill(0);
+                board.unshift(row);
+                clearedCount++;
+                y++;
+            }
+
+            if (clearedCount > 0) {
+                sound.clear();
+                lines += clearedCount;
+                score += [0, 100, 300, 500, 800][clearedCount] * level;
+                level = Math.floor(lines / 10) + 1;
+                dropInterval = Math.max(100, 1000 - (level - 1) * 80);
+
+                scoreText.textContent = score;
+                linesText.textContent = lines;
+                levelText.textContent = level;
+
+                // Send Garbage to Opponents (Multiplayer)
+                let garbageToSend = 0;
+                if (clearedCount === 2) garbageToSend = 1;
+                else if (clearedCount === 3) garbageToSend = 2;
+                else if (clearedCount === 4) garbageToSend = 4;
+
+                if (garbageToSend > 0 && mode !== 'single') {
+                    sendGarbageToOpponents(garbageToSend);
+                }
+            }
+
+            // Apply incoming garbage if no line cleared
+            if (clearedCount === 0 && pendingGarbage > 0) {
+                applyGarbageLines();
+            }
+
+            spawnPiece();
+            broadcastBoardState();
+        }
+
+        function spawnPiece() {
+            if (nextQueue.length < 5) refillNextQueue();
+            const nextType = nextQueue.shift();
+            currentPiece = createPiece(nextType);
+
+            if (collide(board, currentPiece)) {
+                handleGameOver();
+            }
+
+            drawNext();
+        }
+
+        function receiveGarbage(amount) {
+            pendingGarbage += amount;
+            garbageCountText.textContent = pendingGarbage;
+            showToast(`${amount} 行のお邪魔攻撃が届きました！`, 'error');
+        }
+
+        function drawBlock(ctx, x, y, color, size = 30) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * size, y * size, size, size);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(x * size, y * size, size, 3);
+            ctx.fillRect(x * size, y * size, 3, size);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(x * size, (y + 1) * size - 3, size, 3);
+            ctx.fillRect((x + 1) * size - 3, y * size, 3, size);
+
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x * size, y * size, size, size);
+        }
+
+        function drawGhostPiece(ctx, piece) {
+            const ghost = { ...piece, y: piece.y };
+            while (!collide(board, ghost)) {
+                ghost.y++;
+            }
+            ghost.y--;
+
+            ghost.shape.forEach((row, y) => {
+                row.forEach((val, x) => {
+                    if (val !== 0) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                        ctx.fillRect((ghost.x + x) * 30, (ghost.y + y) * 30, 30, 30);
+                        ctx.strokeStyle = piece.color;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect((ghost.x + x) * 30, (ghost.y + y) * 30, 30, 30);
+                    }
+                });
+            });
+        }
+
+        function draw() {
+            mainCtx.fillStyle = '#020617';
+            mainCtx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+            // Draw Grid Lines
+            mainCtx.strokeStyle = 'rgba(51, 65, 85, 0.3)';
+            mainCtx.lineWidth = 1;
+            for (let c = 0; c < COLS; c++) {
+                mainCtx.beginPath();
+                mainCtx.moveTo(c * 30, 0);
+                mainCtx.lineTo(c * 30, mainCanvas.height);
+                mainCtx.stroke();
+            }
+            for (let r = 0; r < ROWS; r++) {
+                mainCtx.beginPath();
+                mainCtx.moveTo(0, r * 30);
+                mainCtx.lineTo(mainCanvas.width, r * 30);
+                mainCtx.stroke();
+            }
+
+            // Draw Locked Board Blocks
+            board.forEach((row, y) => {
+                row.forEach((val, x) => {
+                    if (val !== 0) {
+                        drawBlock(mainCtx, x, y, val, 30);
+                    }
+                });
+            });
+
+            // Draw Active Piece & Ghost
+            if (currentPiece && gameRunning) {
+                drawGhostPiece(mainCtx, currentPiece);
+                currentPiece.shape.forEach((row, y) => {
+                    row.forEach((val, x) => {
+                        if (val !== 0) {
+                            drawBlock(mainCtx, currentPiece.x + x, currentPiece.y + y, currentPiece.color, 30);
+                        }
+                    });
+                });
+            }
+        }
+
+        function drawPreviewPiece(ctx, canvas, type) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!type) return;
+            const matrix = TETROMINOES[type].shape;
+            const color = TETROMINOES[type].color;
+            const size = canvas.width / 4;
+            const offsetX = (canvas.width - matrix[0].length * size) / 2;
+            const offsetY = (canvas.height - matrix.length * size) / 2;
+
+            matrix.forEach((row, y) => {
+                row.forEach((val, x) => {
+                    if (val !== 0) {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(offsetX + x * size, offsetY + y * size, size, size);
+                        ctx.strokeStyle = '#020617';
+                        ctx.strokeRect(offsetX + x * size, offsetY + y * size, size, size);
+                    }
+                });
+            });
+        }
+
+        function drawHold() {
+            drawPreviewPiece(holdCtx, holdCanvas, holdPiece);
+        }
+
+        function drawNext() {
+            drawPreviewPiece(nextCtx1, nextCanvas1, nextQueue[0]);
+            drawPreviewPiece(nextCtx2, nextCanvas2, nextQueue[1]);
+            drawPreviewPiece(nextCtx3, nextCanvas3, nextQueue[2]);
+        }
+
+        function update(time = 0) {
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            if (gameRunning) {
+                dropCounter += deltaTime;
+                if (dropCounter > dropInterval) {
+                    playerDrop();
+                }
+                draw();
+            }
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        function resetGame() {
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            score = 0;
+            lines = 0;
+            level = 1;
+            dropInterval = 1000;
+            pendingGarbage = 0;
+            holdPiece = null;
+            canHold = true;
+            nextQueue = [];
+            refillNextQueue();
+
+            scoreText.textContent = '0';
+            linesText.textContent = '0';
+            levelText.textContent = '1';
+            garbageCountText.textContent = '0';
+
+            drawHold();
+            spawnPiece();
+            draw();
+        }
+
+        function startGame() {
+            resetGame();
+            gameRunning = true;
+            gameOverlay.classList.add('hidden');
+            lastTime = performance.now();
+        }
+
+        function handleGameOver() {
+            gameRunning = false;
+            sound.gameover();
+
+            overlayTitle.textContent = 'GAME OVER';
+            overlayTitle.className = 'text-2xl font-bold font-orbitron mb-2 text-red-500';
+            overlaySub.textContent = `最終スコア: ${score}`;
+            overlayBtn.classList.remove('hidden');
+            gameOverlay.classList.remove('hidden');
+
+            if (mode !== 'single') {
+                notifyPlayerEliminated();
+            }
+        }
+
+        function initPeer() {
+            if (peer) return;
+
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                myPeerId = id;
+                console.log('Peer connected with ID:', id);
+            });
+
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => handleIncomingData(data, conn));
+                conn.on('open', () => {
+                    connections[conn.peer] = conn;
+                });
+                conn.on('close', () => {
+                    delete connections[conn.peer];
+                    delete players[conn.peer];
+                    updateLobbyUI();
+                    removeOpponentCanvas(conn.peer);
+                });
+            });
+
+            peer.on('error', (err) => {
+                showToast(`通信エラー: ${err.type}`, 'error');
+            });
+        }
+
+        function createRoom() {
+            initPeer();
+            if (!peer.id) {
+                showToast('通信サーバーに接続中...数秒後に再試行してください', 'error');
+                return;
+            }
+
+            isHost = true;
+            const roomId = myPeerId.substring(0, 6).toUpperCase();
+            document.getElementById('displayRoomId').textContent = roomId;
+
+            players = {};
+            players[myPeerId] = { name: myName, isHost: true, ready: true, isAlive: true, rank: 0, score: 0 };
+
+            roomSetupArea.classList.add('hidden');
+            roomWaitingArea.classList.remove('hidden');
+            updateLobbyUI();
+            showToast('ルームを作成しました', 'success');
+        }
+
+        function joinRoom(targetId) {
+            initPeer();
+            targetId = targetId.trim();
+            if (!targetId) {
+                showToast('ルームIDを入力してください', 'error');
+                return;
+            }
+
+            // Since targetId is truncated ID, connect via host ID or lookup
+            // For PeerJS demo stability, assume targetId is full peer ID or truncated matching
+            hostConn = peer.connect(targetId);
+
+            hostConn.on('open', () => {
+                document.getElementById('displayRoomId').textContent = targetId.toUpperCase();
+                roomSetupArea.classList.add('hidden');
+                roomWaitingArea.classList.remove('hidden');
+                document.getElementById('startGameBtnText').textContent = 'ホストの開始を待機中...';
+                document.getElementById('startGameBtn').disabled = true;
+                document.getElementById('startGameBtn').classList.add('opacity-50');
+
+                // Send JOIN request
+                hostConn.send({
+                    type: 'JOIN',
+                    name: myName
+                });
+                showToast('ルームに接続しました', 'success');
+            });
+
+            hostConn.on('data', (data) => handleIncomingData(data, hostConn));
+
+            hostConn.on('close', () => {
+                showToast('ホストとの接続が切れました', 'error');
+                leaveRoom();
+            });
+
+            hostConn.on('error', (err) => {
+                showToast('部屋への接続に失敗しました', 'error');
+            });
+        }
+
+        function leaveRoom() {
+            if (hostConn) hostConn.close();
+            Object.values(connections).forEach(c => c.close());
+            connections = {};
+            players = {};
+            isHost = false;
+
+            roomWaitingArea.classList.add('hidden');
+            roomSetupArea.classList.remove('hidden');
+            showToast('ルームを退出しました');
+        }
+
+        function handleIncomingData(data, conn) {
+            switch (data.type) {
+                case 'JOIN':
+                    if (isHost) {
+                        players[conn.peer] = { name: data.name, isHost: false, ready: true, isAlive: true, rank: 0, score: 0 };
+                        broadcastState();
+                        updateLobbyUI();
+                    }
+                    break;
+
+                case 'STATE_UPDATE':
+                    players = data.players;
+                    updateLobbyUI();
+                    break;
+
+                case 'GAME_START':
+                    setupOpponentsUI();
+                    switchToGameScreen();
+                    startGame();
+                    break;
+
+                case 'BOARD_SYNC':
+                    updateOpponentMiniCanvas(data.peerId, data.board, data.score);
+                    break;
+
+                case 'GARBAGE_ATTACK':
+                    if (data.targetPeerId === myPeerId || data.targetPeerId === 'ALL') {
+                        receiveGarbage(data.amount);
+                    }
+                    break;
+
+                case 'PLAYER_ELIMINATED':
+                    if (isHost) {
+                        players[data.peerId].isAlive = false;
+                        players[data.peerId].rank = Object.values(players).filter(p => p.isAlive).length + 1;
+                        broadcastState();
+                        checkMultiplayerWinner();
+                    }
+                    markOpponentEliminated(data.peerId);
+                    break;
+
+                case 'GAME_OVER_RESULT':
+                    showMultiplayerResults(data.winnerName, data.rankings);
+                    break;
+            }
+        }
+
+        function broadcastState() {
+            const payload = { type: 'STATE_UPDATE', players };
+            Object.values(connections).forEach(c => c.send(payload));
+        }
+
+        function broadcastBoardState() {
+            if (mode === 'single') return;
+            const payload = {
+                type: 'BOARD_SYNC',
+                peerId: myPeerId,
+                board: board,
+                score: score
+            };
+            if (isHost) {
+                Object.values(connections).forEach(c => c.send(payload));
+            } else if (hostConn) {
+                hostConn.send(payload);
+            }
+        }
+
+        function sendGarbageToOpponents(amount) {
+            if (mode === 'single') return;
+
+            // Pick targets (Random opponent in multi, direct in duo)
+            const aliveOpponents = Object.keys(players).filter(id => id !== myPeerId && players[id].isAlive);
+            if (aliveOpponents.length === 0) return;
+
+            const targetId = aliveOpponents[Math.floor(Math.random() * aliveOpponents.length)];
+            const payload = {
+                type: 'GARBAGE_ATTACK',
+                senderPeerId: myPeerId,
+                targetPeerId: targetId,
+                amount: amount
+            };
+
+            if (isHost) {
+                Object.values(connections).forEach(c => c.send(payload));
+            } else if (hostConn) {
+                hostConn.send(payload);
+            }
+            showToast(`${players[targetId]?.name || '相手'}にお邪魔ラインを送りました！`);
+        }
+
+        function notifyPlayerEliminated() {
+            const payload = { type: 'PLAYER_ELIMINATED', peerId: myPeerId };
+            if (isHost) {
+                players[myPeerId].isAlive = false;
+                players[myPeerId].rank = Object.values(players).filter(p => p.isAlive).length + 1;
+                broadcastState();
+                checkMultiplayerWinner();
+            } else if (hostConn) {
+                hostConn.send(payload);
+            }
+        }
+
+        function checkMultiplayerWinner() {
+            if (!isHost) return;
+            const alivePlayers = Object.entries(players).filter(([id, p]) => p.isAlive);
+            if (alivePlayers.length <= 1) {
+                let winnerName = 'なし';
+                if (alivePlayers.length === 1) {
+                    const [winnerId, winner] = alivePlayers[0];
+                    winner.rank = 1;
+                    winnerName = winner.name;
+                }
+                const rankings = Object.values(players).sort((a, b) => a.rank - b.rank);
+                const payload = { type: 'GAME_OVER_RESULT', winnerName, rankings };
+                Object.values(connections).forEach(c => c.send(payload));
+                showMultiplayerResults(winnerName, rankings);
+            }
+        }
+
+        function updateLobbyUI() {
+            const playerList = document.getElementById('playerList');
+            const countBadge = document.getElementById('playerCountBadge');
+            const pArray = Object.values(players);
+
+            countBadge.textContent = `${pArray.length}/8`;
+            playerList.innerHTML = '';
+
+            pArray.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center text-xs p-2 rounded-lg bg-slate-900 border border-slate-800';
+                item.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-user ${p.isHost ? 'text-amber-400' : 'text-blue-400'}"></i>
+                        <span class="font-bold">${p.name}</span>
+                        ${p.isHost ? '<span class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">HOST</span>' : ''}
+                    </div>
+                    <span class="text-emerald-400 font-semibold">準備完了</span>
+                `;
+                playerList.appendChild(item);
+            });
+        }
+
+        function setupOpponentsUI() {
+            opponentsGrid.innerHTML = '';
+            if (mode === 'single') {
+                opponentsSection.classList.add('hidden');
+                return;
+            }
+            opponentsSection.classList.remove('hidden');
+
+            Object.entries(players).forEach(([id, p]) => {
+                if (id === myPeerId) return;
+
+                const card = document.createElement('div');
+                card.id = `opponent-card-${id}`;
+                card.className = 'bg-slate-950 border border-slate-800 rounded-lg p-1.5 flex flex-col items-center relative overflow-hidden';
+                card.innerHTML = `
+                    <span class="text-[10px] font-bold text-slate-300 truncate w-full text-center mb-1">${p.name}</span>
+                    <canvas id="mini-canvas-${id}" width="80" height="160" class="w-20 h-40 bg-slate-900 rounded"></canvas>
+                    <div id="eliminated-tag-${id}" class="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center hidden">
+                        <span class="text-xs font-bold text-red-500 font-orbitron">OUT</span>
+                    </div>
+                `;
+                opponentsGrid.appendChild(card);
+            });
+        }
+
+        function updateOpponentMiniCanvas(peerId, oppBoard, oppScore) {
+            const canvas = document.getElementById(`mini-canvas-${peerId}`);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const size = 8; // 8x160 for 10x20
+            oppBoard.forEach((row, y) => {
+                row.forEach((val, x) => {
+                    if (val !== 0) {
+                        ctx.fillStyle = val;
+                        ctx.fillRect(x * size, y * size, size, size);
+                        ctx.strokeStyle = '#020617';
+                        ctx.strokeRect(x * size, y * size, size, size);
+                    }
+                });
+            });
+        }
+
+        function markOpponentEliminated(peerId) {
+            const tag = document.getElementById(`eliminated-tag-${peerId}`);
+            if (tag) tag.classList.remove('hidden');
+        }
+
+        function removeOpponentCanvas(peerId) {
+            const card = document.getElementById(`opponent-card-${peerId}`);
+            if (card) card.remove();
+        }
+
+        function showMultiplayerResults(winnerName, rankings) {
+            gameRunning = false;
+            overlayTitle.textContent = 'GAME OVER';
+            overlayTitle.className = 'text-2xl font-bold font-orbitron mb-1 text-purple-400';
+            overlaySub.innerHTML = `<span class="text-amber-400 font-bold">勝者: ${winnerName}</span>`;
+            overlayBtn.classList.remove('hidden');
+            gameOverlay.classList.remove('hidden');
+        }
+
+        function switchToGameScreen() {
+            lobbyScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            if (window.innerWidth < 768) {
+                document.getElementById('touchController').classList.remove('hidden');
+            }
+        }
+
+        function switchToLobbyScreen() {
+            gameRunning = false;
+            gameScreen.classList.add('hidden');
+            lobbyScreen.classList.remove('hidden');
+            document.getElementById('touchController').classList.add('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mode Select Buttons
+            document.getElementById('modeSingleBtn').addEventListener('click', () => {
+                mode = 'single';
+                roomSetupArea.classList.add('hidden');
+                roomWaitingArea.classList.add('hidden');
+                opponentsSection.classList.add('hidden');
+                switchToGameScreen();
+                startGame();
+            });
+
+            document.getElementById('modeDuoBtn').addEventListener('click', () => {
+                mode = 'duo';
+                roomSetupArea.classList.remove('hidden');
+                roomWaitingArea.classList.add('hidden');
+            });
+
+            document.getElementById('modeMultiBtn').addEventListener('click', () => {
+                mode = 'multi';
+                roomSetupArea.classList.remove('hidden');
+                roomWaitingArea.classList.add('hidden');
+            });
+
+            // Name Input & Room Buttons
+            document.getElementById('playerNameInput').addEventListener('input', (e) => {
+                myName = e.target.value.trim() || 'Player';
+            });
+
+            document.getElementById('createRoomBtn').addEventListener('click', createRoom);
+            document.getElementById('joinRoomBtn').addEventListener('click', () => {
+                const id = document.getElementById('joinRoomIdInput').value;
+                joinRoom(id);
+            });
+            document.getElementById('leaveRoomBtn').addEventListener('click', leaveRoom);
+
+            document.getElementById('copyRoomIdBtn').addEventListener('click', () => {
+                const id = document.getElementById('displayRoomId').textContent;
+                navigator.clipboard.writeText(id).then(() => {
+                    showToast('ルームIDをコピーしました');
+                });
+            });
+
+            document.getElementById('startGameBtn').addEventListener('click', () => {
+                if (!isHost) return;
+                const payload = { type: 'GAME_START' };
+                Object.values(connections).forEach(c => c.send(payload));
+                setupOpponentsUI();
+                switchToGameScreen();
+                startGame();
+            });
+
+            document.getElementById('overlayBtn').addEventListener('click', () => {
+                switchToLobbyScreen();
+            });
+
+            // Audio & Controller Toggles
+            document.getElementById('soundToggleBtn').addEventListener('click', () => {
+                sound.muted = !sound.muted;
+                const icon = document.getElementById('soundToggleBtn').querySelector('i');
+                icon.className = sound.muted ? 'fa-solid fa-volume-xmark text-sm text-red-400' : 'fa-solid fa-volume-high text-sm';
+                showToast(sound.muted ? '消音に設定しました' : '効果音をオンにしました');
+            });
+
+            document.getElementById('touchControlToggleBtn').addEventListener('click', () => {
+                const tc = document.getElementById('touchController');
+                tc.classList.toggle('hidden');
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (!gameRunning) return;
+                switch (e.code) {
+                    case 'ArrowLeft':
+                        playerMove(-1);
+                        break;
+                    case 'ArrowRight':
+                        playerMove(1);
+                        break;
+                    case 'ArrowDown':
+                        playerDrop();
+                        break;
+                    case 'ArrowUp':
+                    case 'KeyZ':
+                        playerRotate(1);
+                        break;
+                    case 'Space':
+                        e.preventDefault();
+                        playerHardDrop();
+                        break;
+                    case 'KeyC':
+                    case 'ShiftLeft':
+                    case 'ShiftRight':
+                        playerHold();
+                        break;
+                }
+            });
+
+            const bindTouchBtn = (id, action) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const handler = (e) => {
+                    e.preventDefault();
+                    action();
+                };
+                btn.addEventListener('touchstart', handler, { passive: false });
+                btn.addEventListener('click', handler);
+            };
+
+            bindTouchBtn('btnLeft', () => playerMove(-1));
+            bindTouchBtn('btnRight', () => playerMove(1));
+            bindTouchBtn('btnRotate', () => playerRotate(1));
+            bindTouchBtn('btnSoftDrop', () => playerDrop());
+            bindTouchBtn('btnHardDrop', () => playerHardDrop());
+            bindTouchBtn('btnHold', () => playerHold());
+
+            // Start RequestAnimationFrame Loop
+            requestAnimationFrame(update);
+        });
+    </script>
+</body>
+</html>
