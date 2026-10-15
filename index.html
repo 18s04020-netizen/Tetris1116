@@ -801,32 +801,41 @@
         }
 
         function initPeer() {
-            if (peer) return;
+  if (peer) return;
+  setStatus('ネットワーク接続中...');
+  
+  // 安定したWebSocket/Peerサーバーの接続先を指定
+  peer = new Peer({
+    host: '0.peerjs.com',
+    port: 443,
+    path: '/',
+    secure: true
+  });
 
-            peer = new Peer();
+  peer.on('open', (id) => {
+    myPlayerId = id;
+    setStatus('オンライン準備完了');
+    updatePlayerListUI();
+  });
 
-            peer.on('open', (id) => {
-                myPeerId = id;
-                console.log('Peer connected with ID:', id);
-            });
+  peer.on('connection', (conn) => {
+    setupConnection(conn);
+  });
 
-            peer.on('connection', (conn) => {
-                conn.on('data', (data) => handleIncomingData(data, conn));
-                conn.on('open', () => {
-                    connections[conn.peer] = conn;
-                });
-                conn.on('close', () => {
-                    delete connections[conn.peer];
-                    delete players[conn.peer];
-                    updateLobbyUI();
-                    removeOpponentCanvas(conn.peer);
-                });
-            });
-
-            peer.on('error', (err) => {
-                showToast(`通信エラー: ${err.type}`, 'error');
-            });
-        }
+  peer.on('error', (err) => {
+    console.error(err);
+    if (err.type === 'server-error' || err.type === 'unavailable-id') {
+      setStatus('サーバー接続エラー。再試行中...');
+      setTimeout(() => {
+        peer.destroy();
+        peer = null;
+        initPeer();
+      }, 3000);
+    } else {
+      setStatus('通信エラー: ' + err.type);
+    }
+  });
+}
 
         function createRoom() {
             initPeer();
